@@ -5350,6 +5350,25 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             mosaicStatusNode.removeFromSupernode()
         }
         
+        // Joker Mod - deleted message mark (x for kept deleted messages)
+        if let deletedMessageMark = strongSelf.deletedMessageMark {
+            let isKeptDeleted = JokerCoreHooks.isKeptDeletedMessage(
+                peerId: item.message.id.peerId,
+                namespace: item.message.id.namespace,
+                id: item.message.id.id
+            )
+            if isKeptDeleted {
+                let markSize = CGSize(width: 16.0, height: 16.0)
+                let markFrame = CGRect(
+                    origin: CGPoint(x: backgroundFrame.maxX - markSize.width - 4.0, y: backgroundFrame.maxY - markSize.height - 4.0),
+                    size: markSize
+                )
+                deletedMessageMark.setDeletedMarkVisible(true, frame: markFrame)
+            } else {
+                deletedMessageMark.setDeletedMarkVisible(false, frame: .zero)
+            }
+        }
+
         if let unlockButtonPosition {
             let (size, apply) = unlockButtonSizeAndApply
             var unlockButtonNodeAnimation = animation
