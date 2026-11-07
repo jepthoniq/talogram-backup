@@ -17,24 +17,34 @@ public enum JokerCoreHooks {
         return UserDefaults.standard.bool(forKey: key)
     }
 
+    // المميزات مقفلة ما دامت بوابة الاشتراك مفعّلة والحساب غير مشترك.
+    public static func featuresUnlocked() -> Bool {
+        return !requireSubscriptionGateEnabled() || isChannelSubscribed()
+    }
+
     // ميزة: تجاوز حماية النسخ في الدردشات والقنوات المحمية
     public static func bypassCopyProtectionEnabled() -> Bool {
-        return boolFlag("joker_bypass_copy_protection")
+        return featuresUnlocked() && boolFlag("joker_bypass_copy_protection")
     }
 
     // ميزة: تجميد حالة "الظهور" — لا يُرسل أبداً account.updateStatus
     public static func freezeLastSeenEnabled() -> Bool {
-        return boolFlag("joker_freeze_last_seen")
+        return featuresUnlocked() && boolFlag("joker_freeze_last_seen")
     }
 
     // ميزة: الاحتفاظ برسائل الطرف الآخر المحذوفة محلياً مع علامة x
     public static func keepDeletedMessagesEnabled() -> Bool {
-        return boolFlag("joker_keep_deleted_messages")
+        return featuresUnlocked() && boolFlag("joker_keep_deleted_messages")
     }
 
     // ميزة: حفظ الوسائط ذاتية التدمير في الرسائل المحفوظة تلقائياً
     public static func autoSaveMediaEnabled() -> Bool {
-        return boolFlag("joker_auto_save_media")
+        return featuresUnlocked() && boolFlag("joker_auto_save_media")
+    }
+
+    // ميزة: وضع الشبح — إخفاء إشعارات القراءة
+    public static func ghostModeEnabled() -> Bool {
+        return featuresUnlocked() && boolFlag("joker_ghost_mode")
     }
 
     // بوابة الاشتراك الإجبارية في قناة @aljokeruserbot
@@ -56,6 +66,7 @@ public enum JokerCoreHooks {
         if normalizedName.hasPrefix("@") {
             normalizedName.removeFirst()
         }
+        let cachedStatus = isChannelSubscribed()
         return network.request(Api.functions.contacts.resolveUsername(flags: 0, username: normalizedName, referer: nil))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.contacts.ResolvedPeer?, NoError> in
@@ -63,7 +74,8 @@ public enum JokerCoreHooks {
         }
         |> mapToSignal { result -> Signal<Bool, NoError> in
             guard let result = result, case let .resolvedPeer(resolvedPeerData) = result else {
-                return .single(false)
+                // تعذّر الاستعلام (شبكة/ازدحام): نبقي آخر حالة معروفة بدل قفل المميزات خطأً.
+                return .single(cachedStatus)
             }
             let channels: [Api.InputChannel] = resolvedPeerData.chats.compactMap { chat -> Api.InputChannel? in
                 guard let peer = parseTelegramGroupOrChannel(chat: chat) else {
@@ -75,11 +87,27 @@ public enum JokerCoreHooks {
                 return .single(false)
             }
             return network.request(Api.functions.channels.getParticipant(channel: inputChannel, participant: .inputPeerSelf))
-            |> map { _ -> Bool in
-                return true
+            |> map { result -> Bool in
+                switch result {
+                case let .channelParticipant(channelParticipantData):
+                    switch channelParticipantData.participant {
+                    case .channelParticipantLeft:
+                        // غادر القناة: ليست عضوية فعّالة.
+                        return false
+                    case let .channelParticipantBanned(bannedData):
+                        let hasLeft = (bannedData.flags & (1 << 0)) != 0
+                        return !hasLeft
+                    default:
+                        return true
+                    }
+                }
             }
-            |> `catch` { _ -> Signal<Bool, NoError> in
-                return .single(false)
+            |> `catch` { error -> Signal<Bool, NoError> in
+                // 400/403 تعني أن العضوية غير موجودة فعلاً؛ أي خطأ آخر لا يمسّ الحالة المحفوظة.
+                if error.errorCode == 400 || error.errorCode == 403 {
+                    return .single(false)
+                }
+                return .single(cachedStatus)
             }
         }
     }
@@ -100,7 +128,7 @@ public enum JokerCoreHooks {
     // يُستخدم عند الضغط على زر العين في وضع الشبح: يُرسل طلب قراءة مباشر
     // دون المرور عبر مسار المزامنة المعطّل بواسطة بوابة joker_ghost_mode.
     public static func markMessagesAsReadViaNetwork(account: Account, messageIds: [MessageId]) -> Signal<Void, NoError> {
-        guard !messageIds.isEmpty else {
+        guard featuresUnlocked(), !messageIds.isEmpty else {
             return .complete()
         }
         return account.postbox.transaction { transaction -> [(Api.InputPeer, [Int32], Api.InputChannel?, Bool)] in
@@ -152,6 +180,9 @@ public enum JokerCoreHooks {
     // يُستخدم عند الضغط على زر العين في عنوان الدردشة: تُقرأ جميع رسائل المراسَل
     // دفعة واحدة عبر network.request مباشرة، متجاوزة بوابة الشبح في مسار المزامنة.
     public static func readAllMessagesForPeer(account: Account, peerId: PeerId) -> Signal<Void, NoError> {
+        guard featuresUnlocked() else {
+            return .complete()
+        }
         return account.postbox.transaction { transaction -> (Api.InputPeer, Api.InputChannel?)? in
             guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
                 return nil
@@ -267,6 +298,9 @@ public enum JokerCoreHooks {
     }
 
     public static func isKeptDeletedMessage(peerId: PeerId, namespace: Int32, id: Int32) -> Bool {
+        guard featuresUnlocked() else {
+            return false
+        }
         let storage = UserDefaults.standard.dictionary(forKey: keptDeletedStorageKey) as? [String: [Int64]] ?? [:]
         guard let values = storage[String(peerId.id._internalGetInt64Value())] else {
             return false
