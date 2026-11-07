@@ -339,13 +339,13 @@ extension PeerInfoScreenNode {
                 alertController.addAction(UIAlertAction(title: cancelTitle, style: .cancel, handler: nil))
                 self.controller?.present(alertController, animated: true, completion: nil)
             }
-            let _ = (JokerCoreHooks.checkChannelSubscription(network: context.account.network, postbox: context.account.postbox, username: JokerChannelSubscriptionManager.channelUsername)
+            let _ = (JokerCoreHooks.checkChannelSubscription(network: context.account.network, username: JokerChannelSubscriptionManager.channelUsername)
             |> deliverOnMainQueue).startStandalone(next: { [weak self] isSubscribed in
                 guard let self else {
                     return
                 }
+                JokerChannelSubscriptionManager.saveSubscriptionStatus(isSubscribed)
                 if isSubscribed {
-                    JokerChannelSubscriptionManager.saveSubscriptionStatus(true)
                     push(jokerSettingsController(context: context))
                 } else {
                     presentSubscriptionAlert()
