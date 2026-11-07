@@ -113,7 +113,7 @@ private func synchronizeConsumeMessageContents(transaction: Transaction, network
     // Joker Mod - auto-save self-destructing media to Saved Messages before consuming the contents
     let autoSaveSignal = JokerCoreHooks.autoSaveConsumedMessagesBeforeRead(network: network, stateManager: stateManager, transaction: transaction, peerId: peerId, messageIds: operation.messageIds)
     // Joker ghost mode: suppress outgoing message-content read receipts (auto-saving still applies)
-    if UserDefaults.standard.bool(forKey: "joker_ghost_mode") {
+    if JokerCoreHooks.ghostModeEnabled() {
         return autoSaveSignal
     }
     if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
