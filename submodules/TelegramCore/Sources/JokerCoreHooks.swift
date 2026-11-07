@@ -271,7 +271,32 @@ public enum JokerCoreHooks {
         }
     }
 
-    // MARK: - سجل الرسائل المحذوفة المحفوظة محلياً
+    // MARK: - إرسال رسالة إلى الرسائل المحفوظة (للحفظ التلقائي للوسائط ذاتية التدمير)
+    public static func forwardMessageToSavedMessages(account: Account, messageId: MessageId) -> Signal<Void, NoError> {
+        return account.postbox.transaction { transaction -> (Api.InputPeer, Int32)? in
+            guard let peer = transaction.getPeer(messageId.peerId), let inputPeer = apiInputPeer(peer) else {
+                return nil
+            }
+            return (inputPeer, messageId.id.id)
+        }
+        |> mapToSignal { resolved -> Signal<Void, NoError> in
+            guard let (inputPeer, messageIdInt) = resolved else {
+                return .complete()
+            }
+            let randomId = Int64.random(in: Int64.min ... Int64.max)
+            return account.network.request(Api.functions.messages.forwardMessages(flags: 0, fromPeer: inputPeer, id: [messageIdInt], randomId: [randomId], toPeer: .inputPeerSelf, topMsgId: nil, replyTo: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, sendAs: nil, quickReplyShortcut: nil, effect: nil, videoTimestamp: nil, allowPaidStars: nil, suggestedPost: nil))
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<Api.Updates?, NoError> in
+                return .single(nil)
+            }
+            |> mapToSignal { updates -> Signal<Void, NoError> in
+                if let updates = updates {
+                    account.stateManager.addUpdates(updates)
+                }
+                return .complete()
+            }
+        }
+    }
     // يُكتب من داخل replayFinalState عند الاحتفاظ بالرسائل بدلاً من حذفها،
     // ويُقرأ من وحدة الفقاعة لعرض علامة x بجانب الرسائل المحفوظة.
     private static let keptDeletedStorageKey = "joker_kept_deleted_ids"
