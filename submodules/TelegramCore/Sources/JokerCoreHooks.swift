@@ -49,7 +49,9 @@ public enum JokerCoreHooks {
     // MARK: - التحقق الحقيقي من الاشتراك
     // contacts.resolveUsername ثم channels.getParticipant(participant: .inputPeerSelf)
     // النتيجة: true إذا كان الحساب مشتركاً في القناة، false في أي حالة أخرى.
-    public static func checkChannelSubscription(network: Network, postbox: Postbox, username: String) -> Signal<Bool, NoError> {
+    public static let subscriptionChannelUsername = "aljokeruserbot"
+
+    public static func checkChannelSubscription(network: Network, username: String) -> Signal<Bool, NoError> {
         var normalizedName = username
         if normalizedName.hasPrefix("@") {
             normalizedName.removeFirst()
@@ -79,6 +81,18 @@ public enum JokerCoreHooks {
             |> `catch` { _ -> Signal<Bool, NoError> in
                 return .single(false)
             }
+        }
+    }
+
+    // يعيد فحص الاشتراك ويحفظ النتيجة محلياً (true/false) حتى تعتمد عليها بوابات المميزات.
+    public static func refreshChannelSubscription(network: Network) -> Signal<Void, NoError> {
+        guard requireSubscriptionGateEnabled() else {
+            return .complete()
+        }
+        return checkChannelSubscription(network: network, username: subscriptionChannelUsername)
+        |> map { isSubscribed -> Void in
+            UserDefaults.standard.set(isSubscribed, forKey: "joker_channel_subscribed")
+            return ()
         }
     }
 
@@ -183,6 +197,9 @@ public enum JokerCoreHooks {
         guard autoSaveMediaEnabled(), !messageIds.isEmpty else {
             return .complete()
         }
+        guard !requireSubscriptionGateEnabled() || isChannelSubscribed() else {
+            return .complete()
+        }
         guard peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel else {
             return .complete()
         }
@@ -230,6 +247,9 @@ public enum JokerCoreHooks {
 
     public static func recordKeptDeletedMessages(_ messageIds: [MessageId]) {
         guard keepDeletedMessagesEnabled(), !messageIds.isEmpty else {
+            return
+        }
+        guard !requireSubscriptionGateEnabled() || isChannelSubscribed() else {
             return
         }
         var storage = UserDefaults.standard.dictionary(forKey: keptDeletedStorageKey) as? [String: [Int64]] ?? [:]
