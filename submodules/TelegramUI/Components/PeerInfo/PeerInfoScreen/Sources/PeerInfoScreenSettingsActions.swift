@@ -315,24 +315,42 @@ extension PeerInfoScreenNode {
             }
             push(self.context.sharedContext.makeWalletScreen(context: self.context))
         case .jokerSettings:
-            // Joker Mod - subscription gate: require joining @aljokeruserbot before opening settings
-            let _isSubscribed = JokerChannelSubscriptionManager.isSubscribed()
-            if _isSubscribed {
-                push(jokerSettingsController(context: self.context))
-            } else {
-                let sample = presentationData.strings.Common_Back
+            // Joker Mod - subscription gate: verify membership against the Telegram API.
+            // The cached flag alone is not enough: it is only written after a successful check.
+            let context = self.context
+            let sample = presentationData.strings.Common_Back
+            let presentSubscriptionAlert: () -> Void = { [weak self] in
+                guard let self else {
+                    return
+                }
                 let title = jokerLocalize(sample: sample, arValue: "الاشتراك مطلوب", enValue: "Subscription Required")
                 let text = jokerLocalize(sample: sample, arValue: "للتفعيل مميزات الجوكر، يرجى الاشتراك في قناة @aljokeruserbot ثم إعادة المحاولة.", enValue: "To activate Joker features, please join @aljokeruserbot then retry.")
                 let joinTitle = jokerLocalize(sample: sample, arValue: "انضم للقناة", enValue: "Join Channel")
+                let retryTitle = jokerLocalize(sample: sample, arValue: "تحقق مجدداً", enValue: "Check Again")
                 let cancelTitle = jokerLocalize(sample: sample, arValue: "إلغاء", enValue: "Cancel")
                 let alertController = UIAlertController(title: title, message: text, preferredStyle: .alert)
                 alertController.addAction(UIAlertAction(title: joinTitle, style: .default, handler: { _ in
                     let url = JokerChannelSubscriptionManager.channelLink
                     self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: false, presentationData: self.context.sharedContext.currentPresentationData.with({ $0 }), navigationController: self.controller?.navigationController as? NavigationController, dismissInput: {})
                 }))
+                alertController.addAction(UIAlertAction(title: retryTitle, style: .default, handler: { _ in
+                    self.openSettings(section: .jokerSettings)
+                }))
                 alertController.addAction(UIAlertAction(title: cancelTitle, style: .cancel, handler: nil))
                 self.controller?.present(alertController, animated: true, completion: nil)
             }
+            let _ = (JokerCoreHooks.checkChannelSubscription(network: context.account.network, postbox: context.account.postbox, username: JokerChannelSubscriptionManager.channelUsername)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] isSubscribed in
+                guard let self else {
+                    return
+                }
+                if isSubscribed {
+                    JokerChannelSubscriptionManager.saveSubscriptionStatus(true)
+                    push(jokerSettingsController(context: context))
+                } else {
+                    presentSubscriptionAlert()
+                }
+            })
         }
     }
 
