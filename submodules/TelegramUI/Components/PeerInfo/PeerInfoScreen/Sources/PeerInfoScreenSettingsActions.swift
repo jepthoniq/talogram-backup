@@ -318,6 +318,10 @@ extension PeerInfoScreenNode {
             // Joker Mod - subscription gate: verify membership against the Telegram API.
             // The cached flag alone is not enough: it is only written after a successful check.
             let context = self.context
+            if !JokerCoreHooks.requireSubscriptionGateEnabled() {
+                push(jokerSettingsController(context: context))
+                return
+            }
             let sample = presentationData.strings.Common_Back
             let presentSubscriptionAlert: () -> Void = { [weak self] in
                 guard let self else {
