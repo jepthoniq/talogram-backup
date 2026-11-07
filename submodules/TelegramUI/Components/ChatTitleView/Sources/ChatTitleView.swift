@@ -479,10 +479,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 self.isUserInteractionEnabled = isEnabled
                 self.button.isUserInteractionEnabled = isEnabled
                 
-                // Joker Mod - ghost mode eye button in chat title (next to peer name)
+                // Joker Mod - eye button in chat title (next to peer name): tap reads all messages in this chat
                 if case let .peer(peerView, _, _, _, _, _, _, _, _) = titleContent {
-                    let ghostOn = UserDefaults.standard.bool(forKey: "joker_ghost_mode")
-                    if ghostOn, peerView.peerId != self.context.account.peerId {
+                    if peerView.peerId != self.context.account.peerId {
                         if self.jokerEyeImageSet != true {
                             self.titleRightIconNode.image = UIImage(systemName: "eye")?.withRenderingMode(.alwaysTemplate)
                             self.titleRightIconNode.tintColor = self.theme.rootController.navigationBar.accentTextColor
