@@ -277,7 +277,7 @@ public enum JokerCoreHooks {
             guard let peer = transaction.getPeer(messageId.peerId), let inputPeer = apiInputPeer(peer) else {
                 return nil
             }
-            return (inputPeer, messageId.id.id)
+            return (inputPeer, messageId.id)
         }
         |> mapToSignal { resolved -> Signal<Void, NoError> in
             guard let (inputPeer, messageIdInt) = resolved else {
