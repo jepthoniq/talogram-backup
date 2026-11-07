@@ -32,9 +32,9 @@ public class JokerIntegrationManager {
     }
 
     private static func saveMediaToSavedMessages(context: AccountContext, messageId: EngineMessage.Id?) {
-        // هذا Platzhalter - يحتاج ربط مع API.forwardMessages عبر TelegramEngine
-        // مع التحقق من الوسائط ذاتية التدمير (محتوى الرسالة نفسه).
-        print("Joker: جاري حفظ الوسيط في الرسائل المحفوظة...")
+        guard let messageId = messageId else { return }
+        // تحويل الرسالة إلى الرسائل المحفوظة عبر النواة (يستخدم postbox + network)
+        let _ = JokerCoreHooks.forwardMessageToSavedMessages(account: context.account, messageId: messageId).start()
     }
 
     // MARK: - ميزة 2: وضع الشبح (Ghost Mode)
@@ -66,19 +66,25 @@ public class JokerIntegrationManager {
 
         guard jokerSettings.keepDeletedMessages else { return }
 
-        // التحقق من الاشتراك في القناة
+        // التحقق من الاشتراك في القناة إذا كان مطلوباً
         if jokerSettings.requireChannelSubscription && !JokerChannelSubscriptionManager.isSubscribed() {
             return
         }
 
-        // بدلاً من حذف الرسالة، ضع علامة isDeletedBySender = true
-        print("Joker: رسالة محذوفة محفوظة محلياً: \(messageId)")
+        // تسجيل المعرف محلياً ليظهر بجانبه علامة x في الفقاعة
+        JokerCoreHooks.recordKeptDeletedMessages([messageId])
     }
 
     // استدع هذه الدالة عند حذف المحادثة بالكامل (Clear History)
     // ملاحظة: engine.messages.deleteHistory غير متوفر؛ الحذف الفعلي يحدث
     // من الكود الأصلي عند Clear History.
     public static func onClearHistory(context: AccountContext, peerId: EnginePeer.Id) {
+        //禁止 الحذف الكامل إذا كان الاحتفاظ بالرسائل المحذوفة مفعلاً
+        let jokerSettings = getJokerSettingsFromCache()
+        if jokerSettings.keepDeletedMessages {
+            print("Joker: Clear History مُعطل لأن الاحتفاظ بالرسائل المحذوفة مفعل: \(peerId)")
+            return
+        }
         print("Joker: تم حذف المحادثة بالكامل نهائياً: \(peerId)")
     }
 
