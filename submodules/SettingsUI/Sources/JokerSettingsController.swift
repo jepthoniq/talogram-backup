@@ -75,7 +75,7 @@ private enum JokerSettingsControllerEntry: ItemListNodeEntry {
         switch self {
         case .channelSubscriptionHeader, .channelSubscriptionInfo, .channelSubscribeButton:
             return JokerSettingsControllerSection.channelSubscription.rawValue
-        case .featuresHeader, .autoSaveMediaToggle, .allow100AccountsToggle, .ghostModeToggle, .forcePremiumTranslationToggle, .keepDeletedMessagesToggle, .requireSubscriptionToggle:
+        case .featuresHeader, .autoSaveMediaToggle, .allow100AccountsToggle, .ghostModeToggle, .forcePremiumTranslationToggle, .freezeLastSeenToggle, .bypassCopyProtectionToggle, .keepDeletedMessagesToggle, .requireSubscriptionToggle:
             return JokerSettingsControllerSection.features.rawValue
         case .creditsHeader, .creditsText:
             return JokerSettingsControllerSection.credits.rawValue
@@ -214,14 +214,14 @@ public func jokerSettingsController(context: AccountContext) -> ViewController {
         updateForcePremiumTranslation: { value in
             let _ = updateJokerSettingsInteractively(accountManager: context.sharedContext.accountManager, { $0.withUpdatedForcePremiumTranslation(value) }).start()
         },
+        updateKeepDeletedMessages: { value in
+            let _ = updateJokerSettingsInteractively(accountManager: context.sharedContext.accountManager, { $0.withUpdatedKeepDeletedMessages(value) }).start()
+        },
         updateFreezeLastSeen: { value in
             let _ = updateJokerSettingsInteractively(accountManager: context.sharedContext.accountManager, { $0.withUpdatedFreezeLastSeen(value) }).start()
         },
         updateBypassCopyProtection: { value in
             let _ = updateJokerSettingsInteractively(accountManager: context.sharedContext.accountManager, { $0.withUpdatedBypassCopyProtection(value) }).start()
-        },
-        updateKeepDeletedMessages: { value in
-            let _ = updateJokerSettingsInteractively(accountManager: context.sharedContext.accountManager, { $0.withUpdatedKeepDeletedMessages(value) }).start()
         },
         updateRequireSubscription: { value in
             let _ = updateJokerSettingsInteractively(accountManager: context.sharedContext.accountManager, { $0.withUpdatedRequireChannelSubscription(value) }).start()
