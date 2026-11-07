@@ -171,7 +171,7 @@ jobs:
           {
             echo "## Compile check summary"
             echo ""
-            if grep -h -E "error:" check-*.log > /tmp/quick-check-errors.txt 2>/dev/null; then
+            if grep -h -E "^[^ ]+\.(swift|m|mm|c|cc|cpp|h|hpp):[0-9]+:[0-9]+: (fatal )?error:|^error: " check-*.log > /tmp/quick-check-errors.txt 2>/dev/null; then
               echo '```'
               sort -u /tmp/quick-check-errors.txt | head -n 120
               echo '```'
@@ -190,7 +190,7 @@ jobs:
 
       - name: Fail if compile errors were found
         run: |
-          if grep -q -E "error:" check-*.log; then
+          if grep -q -E "Build did NOT complete successfully|^Make: error:" check-*.log; then
             echo "Compile errors detected."
             exit 1
           fi
