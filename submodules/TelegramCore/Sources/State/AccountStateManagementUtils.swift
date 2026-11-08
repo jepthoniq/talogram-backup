@@ -4639,11 +4639,12 @@ func replayFinalState(
                         // Force an immediate store update so the visible bubble re-renders
                         // and shows the 'x' mark without reopening the chat.
                         for messageId in keptIds {
-                            guard let message = transaction.getMessage(messageId) else {
-                                continue
-                            }
-                            transaction.updateMessage(messageId, { _ -> PostboxUpdateMessage in
-                                return .update(message)
+                            transaction.updateMessage(messageId, update: { currentMessage in
+                                var storeForwardInfo: StoreMessageForwardInfo?
+                                if let forwardInfo = currentMessage.forwardInfo {
+                                    storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
+                                }
+                                return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: currentMessage.attributes, media: currentMessage.media))
                             })
                         }
                     }
@@ -4680,11 +4681,12 @@ func replayFinalState(
                         // Force an immediate store update so the visible bubble re-renders
                         // and shows the 'x' mark without reopening the chat.
                         for messageId in keptIds {
-                            guard let message = transaction.getMessage(messageId) else {
-                                continue
-                            }
-                            transaction.updateMessage(messageId, { _ -> PostboxUpdateMessage in
-                                return .update(message)
+                            transaction.updateMessage(messageId, update: { currentMessage in
+                                var storeForwardInfo: StoreMessageForwardInfo?
+                                if let forwardInfo = currentMessage.forwardInfo {
+                                    storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
+                                }
+                                return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: currentMessage.attributes, media: currentMessage.media))
                             })
                         }
                     }
