@@ -12,6 +12,8 @@ jobs:
     name: Build Telegram.ipa (macOS 27, Xcode 27.1)
     runs-on: xcode-27
     timeout-minutes: 350
+    env:
+      MAKE_RETRY_ATTEMPTS: 8
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -28,16 +30,22 @@ jobs:
 
       - name: Configure persistent Bazel repository cache
         run: |
-          printf '\nbuild --repository_cache=%s\n' "$HOME/bazel-repository-cache" >> .bazelrc
+          printf '\nbuild --repository_cache=%s\nbuild --downloader_config=%s\n' \
+            "$HOME/bazel-repository-cache" \
+            "$PWD/.github/scripts/bazel-downloader.cfg" >> .bazelrc
 
-      - name: Cache Bazel repository downloads
-        uses: actions/cache@v4
+      - name: Restore Bazel repository cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/bazel-repository-cache
-          key: bazel-repositories-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}-${{ github.run_id }}
+          key: bazel-repositories-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             bazel-repositories-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}-
             bazel-repositories-${{ runner.os }}-
+
+      - name: Prefetch Bazel dependencies into the repository cache
+        continue-on-error: true
+        run: bash .github/scripts/prefetch-bazel-deps.sh
 
       - name: Check build environment
         run: |
@@ -151,3 +159,14 @@ jobs:
           path: build/artifacts/Telegram.ipa
           if-no-files-found: error
           compression-level: 0
+
+      # Save even when the build failed, so the archives that did download on
+      # this runner are reused by the next attempt instead of being fetched
+      # from GitHub again.
+      - name: Save Bazel repository cache
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/bazel-repository-cache
+          key: bazel-repositories-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
