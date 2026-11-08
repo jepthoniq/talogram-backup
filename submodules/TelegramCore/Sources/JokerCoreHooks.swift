@@ -327,7 +327,7 @@ public enum JokerCoreHooks {
             return account.postbox.mediaBox.resourceData(item.media.resource, option: .complete(waitUntilFetchStatus: true))
             |> take(1)
             |> mapToSignal { data -> Signal<Void, NoError> in
-                guard data.isComplete, let bytes = try? Data(contentsOf: URL(fileURLWithPath: data.path)) else {
+                guard data.complete, let bytes = try? Data(contentsOf: URL(fileURLWithPath: data.path)) else {
                     return .complete()
                 }
                 let peerId = account.peerId
@@ -360,7 +360,7 @@ public enum JokerCoreHooks {
                     |> `catch` { _ -> Signal<StandaloneSendMessageStatus, NoError> in
                         return .complete()
                     }
-                    |> mapToVoid
+                    |> map { _ in }
                 }
             }
         }
