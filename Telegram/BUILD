@@ -1928,7 +1928,7 @@ ios_application(
     ],
     resources = [
         ":LaunchScreen",
-        ":DefaultAppIcon",
+        #":DefaultAppIcon",
     ],
     frameworks = [
         ":MtProtoKitFramework",
