@@ -31,10 +31,10 @@ public class JokerGhostModeEyeButton: ASDisplayNode {
         self.alpha = 0.0
 
         self.addSubnode(self.iconNode)
-        if let image = UIImage(systemName: "eye.circle.fill")?.withRenderingMode(.alwaysTemplate) {
+        // Layer-backed ASImageNode does not support tintColor; bake the tint into the image.
+        if let image = UIImage(systemName: "eye.circle.fill")?.withTintColor(UIColor(white: 1.0, alpha: 0.92), renderingMode: .alwaysOriginal) {
             self.iconNode.image = image
         }
-        self.iconNode.tintColor = UIColor(white: 1.0, alpha: 0.92)
     }
 
     public func set(messageId: EngineMessage.Id) {
@@ -83,10 +83,10 @@ public class JokerDeletedMessageMark: ASDisplayNode {
         self.alpha = 0.0
 
         self.addSubnode(self.iconNode)
-        if let image = UIImage(systemName: "xmark.circle.fill")?.withRenderingMode(.alwaysTemplate) {
+        // Layer-backed ASImageNode does not support tintColor; bake the tint into the image.
+        if let image = UIImage(systemName: "xmark.circle.fill")?.withTintColor(UIColor(red: 0.86, green: 0.18, blue: 0.18, alpha: 0.95), renderingMode: .alwaysOriginal) {
             self.iconNode.image = image
         }
-        self.iconNode.tintColor = UIColor(red: 0.86, green: 0.18, blue: 0.18, alpha: 0.95)
     }
 
     override public func didLoad() {

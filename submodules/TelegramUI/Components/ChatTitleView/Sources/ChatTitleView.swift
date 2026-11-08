@@ -486,8 +486,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                     let showJokerEye = JokerCoreHooks.ghostModeEnabled() && peerView.peerId != self.context.account.peerId
                     if showJokerEye {
                         if self.jokerEyeImageSet != true {
-                            self.titleRightIconNode.image = UIImage(systemName: "eye")?.withRenderingMode(.alwaysTemplate)
-                            self.titleRightIconNode.tintColor = self.theme.rootController.navigationBar.accentTextColor
+                            // Layer-backed ASImageNode does not support tintColor; bake the tint into the image.
+                            self.titleRightIconNode.image = UIImage(systemName: "eye")?.withTintColor(self.theme.rootController.navigationBar.accentTextColor, renderingMode: .alwaysOriginal)
                             self.jokerEyeImageSet = true
                             updated = true
                         }
@@ -517,7 +517,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                             default:
                                 self.titleRightIconNode.image = nil
                             }
-                            self.titleRightIconNode.tintColor = UIColor(white: 1.0, alpha: 1.0)
                             updated = true
                         }
                     }
