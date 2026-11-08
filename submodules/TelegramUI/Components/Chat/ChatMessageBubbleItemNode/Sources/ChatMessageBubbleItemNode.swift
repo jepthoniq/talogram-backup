@@ -714,10 +714,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     private var ephemeralBadgeTextNode: TextNode?
     private var ephemeralBadgeIconNode: UIImageView?
 
-    // Joker Mod - Ghost Mode Eye Button
-    private var ghostModeEyeButton: JokerGhostModeEyeButton?
-    
-    // Joker Mod - Deleted Message Mark
     private var deletedMessageMark: JokerDeletedMessageMark?
 
     private var credibilityIconView: ComponentHostView<Empty>?
@@ -873,26 +869,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         super.init(rotated: rotated)
         
-        // Joker Mod - Initialize Ghost Mode Eye Button
-        self.ghostModeEyeButton = JokerGhostModeEyeButton(messageId: EngineMessage.Id(peerId: PeerId(0), namespace: 0, id: 0)) { [weak self] messageId in
-            guard let strongSelf = self, let context = strongSelf.item?.context else { return }
-            JokerIntegrationManager.markMessageAsRead(context: context, messageId: messageId)
-        }
-        
-        // Joker Mod - Initialize Deleted Message Mark
         self.deletedMessageMark = JokerDeletedMessageMark()
         
         //self.addSubnode(self.debugNode)
-        
-        // Joker Mod - Add Ghost Mode Eye Button to hierarchy
-        if let ghostModeEyeButton = self.ghostModeEyeButton {
-            self.addSubnode(ghostModeEyeButton)
-        }
-        
-        // Joker Mod - Add Deleted Message Mark to hierarchy
-        if let deletedMessageMark = self.deletedMessageMark {
-            self.addSubnode(deletedMessageMark)
-        }
         
         self.mainContainerNode.shouldBeginWithCustomActivationProcess = { [weak self] location in
             guard let strongSelf = self else {
@@ -969,6 +948,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         self.mainContainerNode.addSubnode(self.mainContextSourceNode)
         self.mainContainerNode.targetNodeForActivationProgress = self.mainContextSourceNode.contentNode
         self.addSubnode(self.mainContainerNode)
+        
+        if let deletedMessageMark = self.deletedMessageMark {
+            self.addSubnode(deletedMessageMark)
+        }
         
         self.mainContextSourceNode.contentNode.addSubnode(self.backgroundWallpaperNode)
         self.mainContextSourceNode.contentNode.addSubnode(self.backgroundNode)
@@ -5350,24 +5333,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             mosaicStatusNode.removeFromSupernode()
         }
         
-        // Joker Mod - ghost mode eye (tap to mark read up to this message)
-        if let ghostModeEyeButton = strongSelf.ghostModeEyeButton {
-            let isIncoming = item.message.flags.contains(.Incoming)
-            let showEye = JokerCoreHooks.ghostModeEnabled() && isIncoming
-            if showEye {
-                ghostModeEyeButton.set(messageId: item.message.id)
-                let eyeSize = CGSize(width: 26.0, height: 26.0)
-                let eyeFrame = CGRect(
-                    origin: CGPoint(x: backgroundFrame.maxX - eyeSize.width / 2.0, y: backgroundFrame.minY - eyeSize.height / 2.0),
-                    size: eyeSize
-                )
-                ghostModeEyeButton.setEyeVisible(true, frame: eyeFrame)
-            } else {
-                ghostModeEyeButton.setEyeVisible(false, frame: .zero)
-            }
-        }
-
-        // Joker Mod - deleted message mark (x for kept deleted messages)
         if let deletedMessageMark = strongSelf.deletedMessageMark {
             let isKeptDeleted = JokerCoreHooks.isKeptDeletedMessage(
                 peerId: item.message.id.peerId,
@@ -5375,9 +5340,17 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 id: item.message.id.id
             )
             if isKeptDeleted {
-                let markSize = CGSize(width: 22.0, height: 22.0)
+                let isIncoming = item.message.flags.contains(.Incoming)
+                let markSize = CGSize(width: 24.0, height: 24.0)
+                var markX: CGFloat
+                if isIncoming {
+                    markX = backgroundFrame.maxX + 4.0
+                } else {
+                    markX = backgroundFrame.minX - markSize.width - 4.0
+                }
+                markX = max(2.0, min(markX, strongSelf.bounds.width - markSize.width - 2.0))
                 let markFrame = CGRect(
-                    origin: CGPoint(x: backgroundFrame.maxX - markSize.width / 2.0, y: backgroundFrame.maxY - markSize.height / 2.0),
+                    origin: CGPoint(x: floor(markX), y: floor(backgroundFrame.midY - markSize.height / 2.0)),
                     size: markSize
                 )
                 deletedMessageMark.setDeletedMarkVisible(true, frame: markFrame)

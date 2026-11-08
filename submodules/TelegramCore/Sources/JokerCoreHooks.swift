@@ -4,10 +4,6 @@ import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
 
-// MARK: - Joker Core Hooks
-// نقاط الربط المعزولة داخل نواة TelegramCore لجميع مميزات تعديلات الجوكر (Talogram)
-// تتم قراءة الأعلام من مرايا UserDefaults التي تكتبها updateJokerSettingsInteractively.
-// ملاحظة: جميع الدوال يجب أن تبقى آمنة من حيث القفل (بدون إمكانية تسبب حلقات).
 
 public enum JokerCoreHooks {
     private static func boolFlag(_ key: String, defaultOnIfUnset: Bool = false) -> Bool {
@@ -17,37 +13,26 @@ public enum JokerCoreHooks {
         return UserDefaults.standard.bool(forKey: key)
     }
 
-    // المميزات مقفلة ما دامت بوابة الاشتراك مفعّلة والحساب غير مشترك.
-    public static func featuresUnlocked() -> Bool {
-        return !requireSubscriptionGateEnabled() || isChannelSubscribed()
-    }
-
-    // ميزة: تجاوز حماية النسخ في الدردشات والقنوات المحمية
     public static func bypassCopyProtectionEnabled() -> Bool {
-        return featuresUnlocked() && boolFlag("joker_bypass_copy_protection")
+        return boolFlag("joker_bypass_copy_protection")
     }
 
-    // ميزة: تجميد حالة "الظهور" — لا يُرسل أبداً account.updateStatus
     public static func freezeLastSeenEnabled() -> Bool {
-        return featuresUnlocked() && boolFlag("joker_freeze_last_seen")
+        return boolFlag("joker_freeze_last_seen")
     }
 
-    // ميزة: الاحتفاظ برسائل الطرف الآخر المحذوفة محلياً مع علامة x
     public static func keepDeletedMessagesEnabled() -> Bool {
-        return featuresUnlocked() && boolFlag("joker_keep_deleted_messages")
+        return boolFlag("joker_keep_deleted_messages")
     }
 
-    // ميزة: حفظ الوسائط ذاتية التدمير في الرسائل المحفوظة تلقائياً
     public static func autoSaveMediaEnabled() -> Bool {
-        return featuresUnlocked() && boolFlag("joker_auto_save_media")
+        return boolFlag("joker_auto_save_media")
     }
 
-    // ميزة: وضع الشبح — إخفاء إشعارات القراءة
     public static func ghostModeEnabled() -> Bool {
-        return featuresUnlocked() && boolFlag("joker_ghost_mode")
+        return boolFlag("joker_ghost_mode")
     }
 
-    // بوابة الاشتراك الإجبارية في قناة @aljokeruserbot
     public static func requireSubscriptionGateEnabled() -> Bool {
         return boolFlag("joker_require_subscription", defaultOnIfUnset: true)
     }
@@ -56,9 +41,6 @@ public enum JokerCoreHooks {
         return boolFlag("joker_channel_subscribed")
     }
 
-    // MARK: - التحقق الحقيقي من الاشتراك
-    // contacts.resolveUsername ثم channels.getParticipant(participant: .inputPeerSelf)
-    // النتيجة: true إذا كان الحساب مشتركاً في القناة، false في أي حالة أخرى.
     public static let subscriptionChannelUsername = "aljokeruserbot"
 
     public static func checkChannelSubscription(network: Network, username: String) -> Signal<Bool, NoError> {
@@ -74,7 +56,6 @@ public enum JokerCoreHooks {
         }
         |> mapToSignal { result -> Signal<Bool, NoError> in
             guard let result = result, case let .resolvedPeer(resolvedPeerData) = result else {
-                // تعذّر الاستعلام (شبكة/ازدحام): نبقي آخر حالة معروفة بدل قفل المميزات خطأً.
                 return .single(cachedStatus)
             }
             let channels: [Api.InputChannel] = resolvedPeerData.chats.compactMap { chat -> Api.InputChannel? in
@@ -92,7 +73,6 @@ public enum JokerCoreHooks {
                 case let .channelParticipant(channelParticipantData):
                     switch channelParticipantData.participant {
                     case .channelParticipantLeft:
-                        // غادر القناة: ليست عضوية فعّالة.
                         return false
                     case let .channelParticipantBanned(bannedData):
                         let hasLeft = (bannedData.flags & (1 << 0)) != 0
@@ -103,7 +83,6 @@ public enum JokerCoreHooks {
                 }
             }
             |> `catch` { error -> Signal<Bool, NoError> in
-                // 400/403 تعني أن العضوية غير موجودة فعلاً؛ أي خطأ آخر لا يمسّ الحالة المحفوظة.
                 if error.errorCode == 400 || error.errorCode == 403 {
                     return .single(false)
                 }
@@ -112,7 +91,6 @@ public enum JokerCoreHooks {
         }
     }
 
-    // يعيد فحص الاشتراك ويحفظ النتيجة محلياً (true/false) حتى تعتمد عليها بوابات المميزات.
     public static func refreshChannelSubscription(network: Network) -> Signal<Void, NoError> {
         guard requireSubscriptionGateEnabled() else {
             return .complete()
@@ -124,11 +102,8 @@ public enum JokerCoreHooks {
         }
     }
 
-    // MARK: - القراءة الشبحية للرسالة الواحدة
-    // يُستخدم عند الضغط على زر العين في وضع الشبح: يُرسل طلب قراءة مباشر
-    // دون المرور عبر مسار المزامنة المعطّل بواسطة بوابة joker_ghost_mode.
     public static func markMessagesAsReadViaNetwork(account: Account, messageIds: [MessageId]) -> Signal<Void, NoError> {
-        guard featuresUnlocked(), !messageIds.isEmpty else {
+        guard !messageIds.isEmpty else {
             return .complete()
         }
         return account.postbox.transaction { transaction -> [(Api.InputPeer, [Int32], Api.InputChannel?, Bool)] in
@@ -176,13 +151,7 @@ public enum JokerCoreHooks {
         }
     }
 
-    // MARK: - قراءة جميع رسائل المحادثة (عند الضغط على عين الشبح في عنوان المحادثة)
-    // يُستخدم عند الضغط على زر العين في عنوان الدردشة: تُقرأ جميع رسائل المراسَل
-    // دفعة واحدة عبر network.request مباشرة، متجاوزة بوابة الشبح في مسار المزامنة.
     public static func readAllMessagesForPeer(account: Account, peerId: PeerId) -> Signal<Void, NoError> {
-        guard featuresUnlocked() else {
-            return .complete()
-        }
         return account.postbox.transaction { transaction -> (Api.InputPeer, Api.InputChannel?)? in
             guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
                 return nil
@@ -221,13 +190,7 @@ public enum JokerCoreHooks {
         }
     }
 
-    // MARK: - وضع القراءة حتى رسالة محددة (أيقونة العين في الفقاعة)
-    // يُستدعى عند الضغط على أيقونة العين بجانب رسالة واردة في وضع الشبح:
-    // تُعلَّم هذه الرسالة وكل ما قبلها كمقروءة، دون لمس الرسائل اللاحقة.
     public static func readMessagesUpToViaNetwork(account: Account, peerId: PeerId, maxMessageId: Int32) -> Signal<Void, NoError> {
-        guard featuresUnlocked() else {
-            return .complete()
-        }
         return account.postbox.transaction { transaction -> (Api.InputPeer, Api.InputChannel?)? in
             guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
                 return nil
@@ -266,15 +229,8 @@ public enum JokerCoreHooks {
         }
     }
 
-    // MARK: - حفظ الوسائط ذاتية التدمير تلقائياً في الرسائل المحفوظة
-    // يُستدعى عند فتح أي وسائط (قبل إرسال إشعار القراءة).
-    // ملاحظة: الخادم لا يسمح بإعادة توجيه وسائط الاستعراض لمرة واحدة/ذاتية التدمير،
-    // لذلك نعيد رفع بايتات الوسائط المخزّنة مؤقتاً كرسالة جديدة في المحادثة مع النفس.
     public static func saveConsumedMediaIfNeeded(account: Account, messageId: MessageId) -> Signal<Void, NoError> {
         guard autoSaveMediaEnabled() else {
-            return .complete()
-        }
-        guard !requireSubscriptionGateEnabled() || isChannelSubscribed() else {
             return .complete()
         }
         struct SavedMediaItem {
@@ -290,8 +246,6 @@ public enum JokerCoreHooks {
             guard let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) else {
                 return nil
             }
-            // لا نحفظ إلا الوسائط ذاتية التدمير/الاستعراض لمرة واحدة عند فتحها:
-            // استعراض لمرة واحدة ( ConsumableContentMessageAttribute ) أو وقت ذاتي التدمير ( AutoclearTimeoutMessageAttribute )
             var isSelfDestruct = false
             for attribute in message.attributes {
                 if let consumable = attribute as? ConsumableContentMessageAttribute, !consumable.consumed {
@@ -365,15 +319,10 @@ public enum JokerCoreHooks {
             }
         }
     }
-    // يُكتب من داخل replayFinalState عند الاحتفاظ بالرسائل بدلاً من حذفها،
-    // ويُقرأ من وحدة الفقاعة لعرض علامة x بجانب الرسائل المحفوظة.
     private static let keptDeletedStorageKey = "joker_kept_deleted_ids"
 
     public static func recordKeptDeletedMessages(_ messageIds: [MessageId]) {
         guard keepDeletedMessagesEnabled(), !messageIds.isEmpty else {
-            return
-        }
-        guard !requireSubscriptionGateEnabled() || isChannelSubscribed() else {
             return
         }
         var storage = UserDefaults.standard.dictionary(forKey: keptDeletedStorageKey) as? [String: [Int64]] ?? [:]
@@ -391,9 +340,6 @@ public enum JokerCoreHooks {
     }
 
     public static func isKeptDeletedMessage(peerId: PeerId, namespace: Int32, id: Int32) -> Bool {
-        guard featuresUnlocked() else {
-            return false
-        }
         let storage = UserDefaults.standard.dictionary(forKey: keptDeletedStorageKey) as? [String: [Int64]] ?? [:]
         guard let values = storage[String(peerId.id._internalGetInt64Value())] else {
             return false
