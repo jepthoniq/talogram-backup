@@ -4638,7 +4638,10 @@ func replayFinalState(
                         JokerCoreHooks.recordKeptDeletedMessages(keptIds)
                         // Force an immediate store update so the visible bubble re-renders
                         // and shows the 'x' mark without reopening the chat.
-                        for messageId in keptIds, let message = transaction.getMessage(messageId) {
+                        for messageId in keptIds {
+                            guard let message = transaction.getMessage(messageId) else {
+                                continue
+                            }
                             transaction.updateMessage(messageId, { _ -> PostboxUpdateMessage in
                                 return .update(message)
                             })
@@ -4676,7 +4679,10 @@ func replayFinalState(
                         JokerCoreHooks.recordKeptDeletedMessages(keptIds)
                         // Force an immediate store update so the visible bubble re-renders
                         // and shows the 'x' mark without reopening the chat.
-                        for messageId in keptIds, let message = transaction.getMessage(messageId) {
+                        for messageId in keptIds {
+                            guard let message = transaction.getMessage(messageId) else {
+                                continue
+                            }
                             transaction.updateMessage(messageId, { _ -> PostboxUpdateMessage in
                                 return .update(message)
                             })
