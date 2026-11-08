@@ -4636,6 +4636,13 @@ func replayFinalState(
                     }
                     if !keptIds.isEmpty {
                         JokerCoreHooks.recordKeptDeletedMessages(keptIds)
+                        // Force an immediate store update so the visible bubble re-renders
+                        // and shows the 'x' mark without reopening the chat.
+                        for messageId in keptIds, let message = transaction.getMessage(messageId) {
+                            transaction.updateMessage(messageId, { _ -> PostboxUpdateMessage in
+                                return .update(message)
+                            })
+                        }
                     }
                     if !deletedIds.isEmpty {
                         _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: deletedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
@@ -4667,6 +4674,13 @@ func replayFinalState(
                     }
                     if !keptIds.isEmpty {
                         JokerCoreHooks.recordKeptDeletedMessages(keptIds)
+                        // Force an immediate store update so the visible bubble re-renders
+                        // and shows the 'x' mark without reopening the chat.
+                        for messageId in keptIds, let message = transaction.getMessage(messageId) {
+                            transaction.updateMessage(messageId, { _ -> PostboxUpdateMessage in
+                                return .update(message)
+                            })
+                        }
                     }
                     if !deletedIds.isEmpty {
                         _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: deletedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
