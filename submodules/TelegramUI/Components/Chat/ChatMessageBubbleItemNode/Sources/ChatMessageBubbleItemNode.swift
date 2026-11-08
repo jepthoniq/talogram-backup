@@ -5350,6 +5350,23 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             mosaicStatusNode.removeFromSupernode()
         }
         
+        // Joker Mod - ghost mode eye (tap to mark read up to this message)
+        if let ghostModeEyeButton = strongSelf.ghostModeEyeButton {
+            let isIncoming = item.message.flags.contains(.Incoming)
+            let showEye = JokerCoreHooks.ghostModeEnabled() && isIncoming
+            if showEye {
+                ghostModeEyeButton.set(messageId: item.message.id)
+                let eyeSize = CGSize(width: 26.0, height: 26.0)
+                let eyeFrame = CGRect(
+                    origin: CGPoint(x: backgroundFrame.maxX - eyeSize.width / 2.0, y: backgroundFrame.minY - eyeSize.height / 2.0),
+                    size: eyeSize
+                )
+                ghostModeEyeButton.setEyeVisible(true, frame: eyeFrame)
+            } else {
+                ghostModeEyeButton.setEyeVisible(false, frame: .zero)
+            }
+        }
+
         // Joker Mod - deleted message mark (x for kept deleted messages)
         if let deletedMessageMark = strongSelf.deletedMessageMark {
             let isKeptDeleted = JokerCoreHooks.isKeptDeletedMessage(
@@ -5358,9 +5375,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 id: item.message.id.id
             )
             if isKeptDeleted {
-                let markSize = CGSize(width: 16.0, height: 16.0)
+                let markSize = CGSize(width: 22.0, height: 22.0)
                 let markFrame = CGRect(
-                    origin: CGPoint(x: backgroundFrame.maxX - markSize.width - 4.0, y: backgroundFrame.maxY - markSize.height - 4.0),
+                    origin: CGPoint(x: backgroundFrame.maxX - markSize.width / 2.0, y: backgroundFrame.maxY - markSize.height / 2.0),
                     size: markSize
                 )
                 deletedMessageMark.setDeletedMarkVisible(true, frame: markFrame)

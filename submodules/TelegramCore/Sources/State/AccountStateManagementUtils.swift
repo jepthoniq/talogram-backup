@@ -4622,18 +4622,58 @@ func replayFinalState(
             case let .DeleteEphemeralMessages(peerId, ids):
                 deleteEphemeralMessages(transaction: transaction, peerId: peerId, ids: ids)
             case let .DeleteMessagesWithGlobalIds(ids):
-                var resourceIds: [MediaResourceId] = []
-                transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
-                    addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
-                })
-                if !resourceIds.isEmpty {
-                    let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
-                }
-                deletedMessageIds.append(contentsOf: ids.map { .global($0) })
-            case let .DeleteMessages(ids):
-                // Joker Mod - keep deleted messages locally when the feature is enabled
+                // Joker Mod - keep deleted messages from the other party locally with an 'x' mark
                 if JokerCoreHooks.keepDeletedMessagesEnabled() {
-                    JokerCoreHooks.recordKeptDeletedMessages(ids)
+                    let resolvedIds = transaction.messageIdsForGlobalIds(ids)
+                    var keptIds: [MessageId] = []
+                    var deletedIds: [MessageId] = []
+                    for messageId in resolvedIds {
+                        if let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) {
+                            keptIds.append(messageId)
+                        } else {
+                            deletedIds.append(messageId)
+                        }
+                    }
+                    if !keptIds.isEmpty {
+                        JokerCoreHooks.recordKeptDeletedMessages(keptIds)
+                    }
+                    if !deletedIds.isEmpty {
+                        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: deletedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
+                            addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+                        })
+                        deletedMessageIds.append(contentsOf: deletedIds.map { .messageId($0) })
+                    }
+                } else {
+                    var resourceIds: [MediaResourceId] = []
+                    transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
+                        addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
+                    })
+                    if !resourceIds.isEmpty {
+                        let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
+                    }
+                    deletedMessageIds.append(contentsOf: ids.map { .global($0) })
+                }
+            case let .DeleteMessages(ids):
+                // Joker Mod - keep deleted messages from the other party locally with an 'x' mark
+                if JokerCoreHooks.keepDeletedMessagesEnabled() {
+                    var keptIds: [MessageId] = []
+                    var deletedIds: [MessageId] = []
+                    for messageId in ids {
+                        if let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) {
+                            keptIds.append(messageId)
+                        } else {
+                            deletedIds.append(messageId)
+                        }
+                    }
+                    if !keptIds.isEmpty {
+                        JokerCoreHooks.recordKeptDeletedMessages(keptIds)
+                    }
+                    if !deletedIds.isEmpty {
+                        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: deletedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
+                            addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+                        })
+                        deletedMessageIds.append(contentsOf: deletedIds.map { .messageId($0) })
+                    }
                 } else {
                     _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, manualAddMessageThreadStatsDifference: { id, add, remove in
                         addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)

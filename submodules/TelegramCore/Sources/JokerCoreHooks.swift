@@ -221,79 +221,147 @@ public enum JokerCoreHooks {
         }
     }
 
-    // MARK: - الحفظ التلقائي في الرسائل المحفوظة
-    // يُستدعى قبل إرسال إشعار قراءة محتويات الرسالة في عملية consume:
-    // يعيد توجيه الرسائل ذات الوسائط (صورة/ملف/فيديو) إلى "الرسائل المحفوظة".
-    public static func autoSaveConsumedMessagesBeforeRead(network: Network, stateManager: AccountStateManager, transaction: Transaction, peerId: PeerId, messageIds: [MessageId]) -> Signal<Void, NoError> {
-        guard autoSaveMediaEnabled(), !messageIds.isEmpty else {
+    // MARK: - وضع القراءة حتى رسالة محددة (أيقونة العين في الفقاعة)
+    // يُستدعى عند الضغط على أيقونة العين بجانب رسالة واردة في وضع الشبح:
+    // تُعلَّم هذه الرسالة وكل ما قبلها كمقروءة، دون لمس الرسائل اللاحقة.
+    public static func readMessagesUpToViaNetwork(account: Account, peerId: PeerId, maxMessageId: Int32) -> Signal<Void, NoError> {
+        guard featuresUnlocked() else {
             return .complete()
         }
-        guard !requireSubscriptionGateEnabled() || isChannelSubscribed() else {
-            return .complete()
-        }
-        guard peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel else {
-            return .complete()
-        }
-        guard let sourcePeer = transaction.getPeer(peerId), let sourceInputPeer = apiInputPeer(sourcePeer) else {
-            return .complete()
-        }
-        var forwardIds: [Int32] = []
-        for messageId in messageIds {
-            if let message = transaction.getMessage(messageId) {
-                let hasMedia = message.media.contains { media in
-                    if media is TelegramMediaImage || media is TelegramMediaFile {
-                        return true
-                    }
-                    return false
-                }
-                if hasMedia {
-                    forwardIds.append(message.id.id)
-                }
+        return account.postbox.transaction { transaction -> (Api.InputPeer, Api.InputChannel?)? in
+            guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
+                return nil
             }
+            if peerId.namespace == Namespaces.Peer.CloudChannel {
+                return (inputPeer, apiInputChannel(peer))
+            }
+            return (inputPeer, nil)
         }
-        guard !forwardIds.isEmpty else {
-            return .complete()
-        }
-        var randomIds: [Int64] = []
-        for _ in forwardIds {
-            randomIds.append(Int64.random(in: Int64.min ... Int64.max))
-        }
-        return network.request(Api.functions.messages.forwardMessages(flags: 0, fromPeer: sourceInputPeer, id: forwardIds, randomId: randomIds, toPeer: .inputPeerSelf, topMsgId: nil, replyTo: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, sendAs: nil, quickReplyShortcut: nil, effect: nil, videoTimestamp: nil, allowPaidStars: nil, suggestedPost: nil))
-        |> map(Optional.init)
-        |> `catch` { _ -> Signal<Api.Updates?, NoError> in
-            return .single(nil)
-        }
-        |> mapToSignal { updates -> Signal<Void, NoError> in
-            if let updates = updates {
-                stateManager.addUpdates(updates)
+        |> mapToSignal { resolved -> Signal<Void, NoError> in
+            guard let (inputPeer, inputChannel) = resolved else {
+                return .complete()
+            }
+            if peerId.namespace == Namespaces.Peer.CloudChannel, let inputChannel = inputChannel {
+                return account.network.request(Api.functions.channels.readHistory(channel: inputChannel, maxId: maxMessageId))
+                |> map { _ -> Void in
+                    return ()
+                }
+                |> `catch` { _ -> Signal<Void, NoError> in
+                    return .complete()
+                }
+            } else if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
+                return account.network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: maxMessageId))
+                |> map(Optional.init)
+                |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in
+                    return .single(nil)
+                }
+                |> mapToSignal { result -> Signal<Void, NoError> in
+                    if let result = result, case let .affectedMessages(affectedMessagesData) = result {
+                        account.stateManager.addUpdateGroups([.updatePts(pts: affectedMessagesData.pts, ptsCount: affectedMessagesData.ptsCount)])
+                    }
+                    return .complete()
+                }
             }
             return .complete()
         }
     }
 
-    // MARK: - إرسال رسالة إلى الرسائل المحفوظة (للحفظ التلقائي للوسائط ذاتية التدمير)
-    public static func forwardMessageToSavedMessages(account: Account, messageId: MessageId) -> Signal<Void, NoError> {
-        return account.postbox.transaction { transaction -> (Api.InputPeer, Int32)? in
-            guard let peer = transaction.getPeer(messageId.peerId), let inputPeer = apiInputPeer(peer) else {
+    // MARK: - حفظ الوسائط ذاتية التدمير تلقائياً في الرسائل المحفوظة
+    // يُستدعى عند فتح أي وسائط (قبل إرسال إشعار القراءة).
+    // ملاحظة: الخادم لا يسمح بإعادة توجيه وسائط الاستعراض لمرة واحدة/ذاتية التدمير،
+    // لذلك نعيد رفع بايتات الوسائط المخزّنة مؤقتاً كرسالة جديدة في المحادثة مع النفس.
+    public static func saveConsumedMediaIfNeeded(account: Account, messageId: MessageId) -> Signal<Void, NoError> {
+        guard autoSaveMediaEnabled() else {
+            return .complete()
+        }
+        guard !requireSubscriptionGateEnabled() || isChannelSubscribed() else {
+            return .complete()
+        }
+        struct SavedMediaItem {
+            var resource: TelegramMediaResource
+            var isImage: Bool
+            var width: Int32
+            var height: Int32
+            var mimeType: String
+            var fileName: String?
+            var attributes: [TelegramMediaFileAttribute]
+        }
+        return account.postbox.transaction { transaction -> (media: SavedMediaItem, caption: String, entities: [MessageTextEntity])? in
+            guard let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) else {
                 return nil
             }
-            return (inputPeer, messageId.id)
-        }
-        |> mapToSignal { resolved -> Signal<Void, NoError> in
-            guard let (inputPeer, messageIdInt) = resolved else {
-                return .complete()
-            }
-            let randomId = Int64.random(in: Int64.min ... Int64.max)
-            return account.network.request(Api.functions.messages.forwardMessages(flags: 0, fromPeer: inputPeer, id: [messageIdInt], randomId: [randomId], toPeer: .inputPeerSelf, topMsgId: nil, replyTo: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, sendAs: nil, quickReplyShortcut: nil, effect: nil, videoTimestamp: nil, allowPaidStars: nil, suggestedPost: nil))
-            |> map(Optional.init)
-            |> `catch` { _ -> Signal<Api.Updates?, NoError> in
-                return .single(nil)
-            }
-            |> mapToSignal { updates -> Signal<Void, NoError> in
-                if let updates = updates {
-                    account.stateManager.addUpdates(updates)
+            // لا نحفظ إلا الوسائط ذاتية التدمير/الاستعراض لمرة واحدة عند فتحها:
+            // استعراض لمرة واحدة ( ConsumableContentMessageAttribute ) أو وقت ذاتي التدمير ( AutoclearTimeoutMessageAttribute )
+            var isSelfDestruct = false
+            for attribute in message.attributes {
+                if let consumable = attribute as? ConsumableContentMessageAttribute, !consumable.consumed {
+                    isSelfDestruct = true
+                    break
                 }
+                if let autoclear = attribute as? AutoclearTimeoutMessageAttribute, autoclear.countdownBeginTime == nil || autoclear.countdownBeginTime == 0 {
+                    isSelfDestruct = true
+                    break
+                }
+            }
+            guard isSelfDestruct else {
+                return nil
+            }
+            let caption = message.text
+            var entities: [MessageTextEntity] = []
+            if let entitiesAttribute = message.attributes.first(where: { $0 is TextEntitiesMessageAttribute }) as? TextEntitiesMessageAttribute {
+                entities = entitiesAttribute.entities
+            }
+            for media in message.media {
+                if let image = media as? TelegramMediaImage, let largest = largestImageRepresentation(image.representations) {
+                    return (SavedMediaItem(resource: largest.resource, isImage: true, width: largest.dimensions.width, height: largest.dimensions.height, mimeType: "image/jpeg", fileName: nil, attributes: []), caption, entities)
+                } else if let file = media as? TelegramMediaFile {
+                    return (SavedMediaItem(resource: file.resource, isImage: false, width: 0, height: 0, mimeType: file.mimeType, fileName: file.fileName, attributes: file.attributes), caption, entities)
+                }
+            }
+            return nil
+        }
+        |> mapToSignal { item -> Signal<Void, NoError> in
+            guard let item = item else {
                 return .complete()
+            }
+            return account.postbox.mediaBox.resourceData(item.media.resource, option: .complete(waitUntilFetchStatus: true))
+            |> take(1)
+            |> mapToSignal { data -> Signal<Void, NoError> in
+                guard data.isComplete, let bytes = try? Data(contentsOf: URL(fileURLWithPath: data.path)) else {
+                    return .complete()
+                }
+                let peerId = account.peerId
+                let auxiliaryMethods = AccountAuxiliaryMethods(fetchResource: { _, _, _, _ in
+                    return nil
+                }, fetchResourceMediaReferenceHash: { _ in
+                    return .single(nil)
+                }, prepareSecretThumbnailData: { _ in
+                    return nil
+                }, backgroundUpload: { _, _, _ in
+                    return .single(nil)
+                })
+                let text = StandaloneSendEnqueueMessage.Text(string: item.caption, entities: item.entities)
+                let upload: Signal<StandaloneUploadMediaEvent, StandaloneUploadMediaError>
+                if item.media.isImage {
+                    upload = standaloneUploadedImage(postbox: account.postbox, network: account.network, peerId: peerId, text: "", source: .data(bytes), thumbnailData: nil, dimensions: PixelDimensions(width: item.media.width, height: item.media.height))
+                } else {
+                    upload = standaloneUploadedFile(postbox: account.postbox, network: account.network, peerId: peerId, text: "", source: .data(bytes), thumbnailData: nil, mimeType: item.media.mimeType, attributes: item.media.attributes, hintFileIsLarge: bytes.count > 10 * 1024 * 1024)
+                }
+                return upload
+                |> `catch` { _ -> Signal<StandaloneUploadMediaEvent, NoError> in
+                    return .complete()
+                }
+                |> mapToSignal { event -> Signal<Void, NoError> in
+                    guard case let .result(result) = event, case let .media(reference) = result else {
+                        return .complete()
+                    }
+                    let message = StandaloneSendEnqueueMessage(content: .arbitraryMedia(media: reference, text: text), replyToMessageId: nil)
+                    return standaloneSendEnqueueMessages(accountPeerId: peerId, postbox: account.postbox, network: account.network, stateManager: account.stateManager, auxiliaryMethods: auxiliaryMethods, peerId: peerId, threadId: nil, messages: [message])
+                    |> `catch` { _ -> Signal<StandaloneSendMessageStatus, NoError> in
+                        return .complete()
+                    }
+                    |> mapToVoid
+                }
             }
         }
     }

@@ -53,6 +53,12 @@ private enum JokerSettingsControllerSection: Int32 {
     case credits
 }
 
+// نص ثنائي اللغة: يُستخدم لأن مفاتيح الجوكر غير موجودة في حزم اللغات البعيدة،
+// فيظهر العربي عند استخدام لغة عربية والإنجليزية في أي لغة أخرى.
+private func jokerLocalized(_ presentationData: PresentationData, _ arValue: String, _ enValue: String) -> String {
+    return jokerLocalize(sample: presentationData.strings.Common_Back, arValue: arValue, enValue: enValue)
+}
+
 private enum JokerSettingsControllerEntry: ItemListNodeEntry {
     case channelSubscriptionHeader(String)
     case channelSubscriptionInfo(String)
@@ -176,24 +182,24 @@ private func jokerSettingsControllerEntries(presentationData: PresentationData, 
     var entries: [JokerSettingsControllerEntry] = []
     
     // القسم الأول: الاشتراك في القناة
-    entries.append(.channelSubscriptionHeader(presentationData.strings.JokerSettings_ChannelSubscription_Header))
-    entries.append(.channelSubscriptionInfo(presentationData.strings.JokerSettings_ChannelSubscription_Text))
-    entries.append(.channelSubscribeButton(presentationData.strings.JokerSettings_SubscribeButton))
+    entries.append(.channelSubscriptionHeader(jokerLocalized(presentationData, "الاشتراك في القناة", "Channel Subscription")))
+    entries.append(.channelSubscriptionInfo(jokerLocalized(presentationData, "يجب الاشتراك في قناة @aljokeruserbot لتفعيل مميزات الجوكر.", "You must subscribe to @aljokeruserbot channel to enable Joker features.")))
+    entries.append(.channelSubscribeButton(jokerLocalized(presentationData, "الاشتراك في القناة", "Subscribe to Channel")))
     
     // القسم الثاني: المميزات
-    entries.append(.featuresHeader(presentationData.strings.JokerSettings_Features_Header))
-    entries.append(.autoSaveMediaToggle(presentationData.strings.JokerSettings_AutoSaveMedia_Title, presentationData.strings.JokerSettings_AutoSaveMedia_Text, settings.autoSaveSelfDestructingMedia))
-    entries.append(.allow100AccountsToggle(presentationData.strings.JokerSettings_Allow100Accounts_Title, presentationData.strings.JokerSettings_Allow100Accounts_Text, settings.allow100Accounts))
-    entries.append(.ghostModeToggle(presentationData.strings.JokerSettings_GhostMode_Title, presentationData.strings.JokerSettings_GhostMode_Text, settings.ghostMode))
-    entries.append(.forcePremiumTranslationToggle(presentationData.strings.JokerSettings_ForcePremiumTranslation_Title, presentationData.strings.JokerSettings_ForcePremiumTranslation_Text, settings.forcePremiumTranslation))
-    entries.append(.freezeLastSeenToggle(presentationData.strings.JokerSettings_FreezeLastSeen_Title, presentationData.strings.JokerSettings_FreezeLastSeen_Text, settings.freezeLastSeen))
-    entries.append(.bypassCopyProtectionToggle(presentationData.strings.JokerSettings_BypassCopyProtection_Title, presentationData.strings.JokerSettings_BypassCopyProtection_Text, settings.bypassCopyProtection))
-    entries.append(.keepDeletedMessagesToggle(presentationData.strings.JokerSettings_KeepDeletedMessages_Title, presentationData.strings.JokerSettings_KeepDeletedMessages_Text, settings.keepDeletedMessages))
-    entries.append(.requireSubscriptionToggle(presentationData.strings.JokerSettings_RequireSubscription_Title, presentationData.strings.JokerSettings_RequireSubscription_Text, settings.requireChannelSubscription))
+    entries.append(.featuresHeader(jokerLocalized(presentationData, "مميزات الجوكر", "Joker Features")))
+    entries.append(.autoSaveMediaToggle(jokerLocalized(presentationData, "حفظ الوسائط ذاتية التدمير تلقائياً", "Auto Save Self-Destructing Media"), jokerLocalized(presentationData, "حفظ الصور والفيديوهات والرسائل الصوتية ذاتية التدمير في الرسائل المحفوظة تلقائياً عند فتحها.", "Automatically save self-destructing photos, videos, and voice messages to Saved Messages when opened."), settings.autoSaveSelfDestructingMedia))
+    entries.append(.allow100AccountsToggle(jokerLocalized(presentationData, "السماح حتى 100 حساب", "Allow 100 Accounts"), jokerLocalized(presentationData, "السماح بإضافة حتى 100 حساب في التطبيق.", "Allow adding up to 100 accounts in the app."), settings.allow100Accounts))
+    entries.append(.ghostModeToggle(jokerLocalized(presentationData, "وضع الشبح", "Ghost Mode"), jokerLocalized(presentationData, "إخفاء علامات قراءة الرسائل. إضافة أيقونة عين على الرسالة، اضغط عليها لتحديدها كمقروءة.", "Hide read receipts. Add an eye icon to messages - tap to mark as read."), settings.ghostMode))
+    entries.append(.forcePremiumTranslationToggle(jokerLocalized(presentationData, "ترجمة البريميوم مجاناً", "Force Premium Translation"), jokerLocalized(presentationData, "تفعيل ميزة الترجمة الخاصة بالبريميوم مجاناً في المحادثات والقنوات.", "Enable the Premium translation feature for free in chats and channels."), settings.forcePremiumTranslation))
+    entries.append(.freezeLastSeenToggle(jokerLocalized(presentationData, "تجميد آخر ظهور", "Freeze Last Seen"), jokerLocalized(presentationData, "إخفاء حالة آخر ظهور الخاصة بك وعدم إرسال تحديثات الحضور إلى الخادم.", "Hide your last seen status and stop sending presence updates to the server."), settings.freezeLastSeen))
+    entries.append(.bypassCopyProtectionToggle(jokerLocalized(presentationData, "تجاوز حماية المحتوى", "Bypass Copy Protection"), jokerLocalized(presentationData, "تجاوز قيود حماية النسخ في القنوات المحمية: نسخ caption، وحفظ الصور، وإعادة توجيه الرسالة بالكامل (الصورة مع caption).", "Bypass copy protection in protected channels: copy captions, save images, and forward the full message (image with caption)."), settings.bypassCopyProtection))
+    entries.append(.keepDeletedMessagesToggle(jokerLocalized(presentationData, "الاحتفاظ بالرسائل المحذوفة", "Keep Deleted Messages"), jokerLocalized(presentationData, "الاحتفاظ بالرسائل المحذوفة محلياً مع علامة x بجانب الفقاعة. مسح المحادثة يحذف كل شيء نهائياً.", "Keep deleted messages locally with an 'x' mark next to the bubble. Clearing history deletes everything permanently."), settings.keepDeletedMessages))
+    entries.append(.requireSubscriptionToggle(jokerLocalized(presentationData, "اشتراط الاشتراك في القناة", "Require Channel Subscription"), jokerLocalized(presentationData, "مطالبة بالاشتراك في قناة @aljokeruserbot قبل تفعيل أي ميزة من مميزات الجوكر.", "Require subscription to @aljokeruserbot channel before enabling any Joker feature."), settings.requireChannelSubscription))
     
     // القسم الثالث: الحقوق
-    entries.append(.creditsHeader(presentationData.strings.JokerSettings_Credits_Header))
-    entries.append(.creditsText(presentationData.strings.JokerSettings_Credits_Text))
+    entries.append(.creditsHeader(jokerLocalized(presentationData, "حقوق المصدر", "Source Credits")))
+    entries.append(.creditsText(jokerLocalized(presentationData, "إصدار معدّل من Talogram - المصدر بواسطة @aljokeruserbot", "Talogram Modified Version - Source by @aljokeruserbot")))
     
     return entries
 }
@@ -242,7 +248,7 @@ public func jokerSettingsController(context: AccountContext) -> ViewController {
         let updatedTheme = presentationData.theme.withModalBlocksBackground()
         presentationData = presentationData.withUpdated(theme: updatedTheme)
         
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.JokerSettings_Title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(jokerLocalized(presentationData, "إعدادات الجوكر", "Joker Settings")), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: jokerSettingsControllerEntries(presentationData: presentationData, settings: jokerSettings), style: .blocks, animateChanges: true)
         
         return (controllerState, (listState, arguments))

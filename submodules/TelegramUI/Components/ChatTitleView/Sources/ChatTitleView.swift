@@ -227,8 +227,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     private var pointerInteraction: PointerInteraction?
     
     // Joker Mod - ghost mode eye button in chat title (next to peer name)
-    private var jokerEyeTapGesture: UITapGestureRecognizer?
-    private var jokerEyeImageSet: Bool = false    
+    // الأيقونة تُرسم عبر titleRightIconNode، وهذا العقد الشفاف يلتقط اللمس فوقها
+    // (مضاف فوق زر المحادثة الذي يغطي كامل الترويسة)
+    private var jokerEyeHitNode: ASDisplayNode?
+    private var jokerEyeImageSet: Bool = false
     public var inputActivities: ChatTitleComponent.Activities? {
         didSet {
             let _ = self.updateStatus()
@@ -479,37 +481,55 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 self.isUserInteractionEnabled = isEnabled
                 self.button.isUserInteractionEnabled = isEnabled
                 
-                // Joker Mod - eye button in chat title (next to peer name): tap reads all messages in this chat
+                // Joker Mod - eye button in chat title (next to peer name): tap reads all messages in this chat (ghost mode only)
                 if case let .peer(peerView, _, _, _, _, _, _, _, _) = titleContent {
-                    if peerView.peerId != self.context.account.peerId {
+                    let showJokerEye = JokerCoreHooks.ghostModeEnabled() && peerView.peerId != self.context.account.peerId
+                    if showJokerEye {
                         if self.jokerEyeImageSet != true {
                             self.titleRightIconNode.image = UIImage(systemName: "eye")?.withRenderingMode(.alwaysTemplate)
                             self.titleRightIconNode.tintColor = self.theme.rootController.navigationBar.accentTextColor
                             self.jokerEyeImageSet = true
+                            updated = true
                         }
-                        if self.jokerEyeTapGesture == nil {
+                        if self.jokerEyeHitNode == nil {
+                            let hitNode = ASDisplayNode()
+                            hitNode.isLayerBacked = false
+                            hitNode.isOpaque = false
+                            hitNode.backgroundColor = .clear
+                            hitNode.isUserInteractionEnabled = true
+                            hitNode.alpha = 1.0
                             let tap = UITapGestureRecognizer(target: self, action: #selector(self.jokerEyeTapped))
-                            self.titleRightIconNode.view.addGestureRecognizer(tap)
-                            self.jokerEyeTapGesture = tap
+                            hitNode.view.addGestureRecognizer(tap)
+                            self.addSubnode(hitNode)
+                            self.jokerEyeHitNode = hitNode
+                            updated = true
                         }
                     } else {
-                        if let tap = self.jokerEyeTapGesture {
-                            self.titleRightIconNode.view.removeGestureRecognizer(tap)
-                            self.jokerEyeTapGesture = nil
+                        if let hitNode = self.jokerEyeHitNode {
+                            hitNode.removeFromSupernode()
+                            self.jokerEyeHitNode = nil
                         }
                         if self.jokerEyeImageSet == true {
-                            self.titleRightIconNode.image = nil
                             self.jokerEyeImageSet = false
+                            switch self.titleRightIcon {
+                            case .mute:
+                                self.titleRightIconNode.image = PresentationResourcesChat.chatTitleMuteIcon(titleTheme)
+                            default:
+                                self.titleRightIconNode.image = nil
+                            }
+                            self.titleRightIconNode.tintColor = UIColor(white: 1.0, alpha: 1.0)
+                            updated = true
                         }
                     }
                 } else {
-                    if let tap = self.jokerEyeTapGesture {
-                        self.titleRightIconNode.view.removeGestureRecognizer(tap)
-                        self.jokerEyeTapGesture = nil
+                    if let hitNode = self.jokerEyeHitNode {
+                        hitNode.removeFromSupernode()
+                        self.jokerEyeHitNode = nil
                     }
                     if self.jokerEyeImageSet == true {
-                        self.titleRightIconNode.image = nil
                         self.jokerEyeImageSet = false
+                        self.titleRightIconNode.image = nil
+                        updated = true
                     }
                 }
                 
@@ -1136,6 +1156,12 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     
         if let image = self.titleRightIconNode.image {
             self.titleRightIconNode.frame = CGRect(origin: CGPoint(x: titleFrame.width + 3.0 + UIScreenPixel, y: 6.0), size: image.size)
+            if let hitNode = self.jokerEyeHitNode {
+                // مساحة اللمس في نفس المكان لكن بإحداثيات الجذر (وليست إحداثيات titleTextNode)
+                hitNode.frame = CGRect(origin: CGPoint(x: titleFrame.minX + titleFrame.width + 3.0 + UIScreenPixel, y: titleFrame.origin.y + 6.0), size: image.size)
+            }
+        } else if let hitNode = self.jokerEyeHitNode {
+            hitNode.frame = .zero
         }
         
         self.pointerInteraction = PointerInteraction(view: self, style: .rectangle(CGSize(width: titleFrame.width + 16.0, height: 40.0)))

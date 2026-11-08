@@ -110,14 +110,14 @@ func managedSynchronizeConsumeMessageContentOperations(postbox: Postbox, network
 }
 
 private func synchronizeConsumeMessageContents(transaction: Transaction, network: Network, stateManager: AccountStateManager, peerId: PeerId, operation: SynchronizeConsumeMessageContentsOperation) -> Signal<Void, NoError> {
-    // Joker Mod - auto-save self-destructing media to Saved Messages before consuming the contents
-    let autoSaveSignal = JokerCoreHooks.autoSaveConsumedMessagesBeforeRead(network: network, stateManager: stateManager, transaction: transaction, peerId: peerId, messageIds: operation.messageIds)
+    // Joker Mod - الحفظ التلقائي للوسائط ذاتية التدمير يتم من واجهة المعاينة
+    // (PeerMessagesMediaPlaylist / SecretMediaPreviewController) قبل الاستهلاك
     // Joker ghost mode: suppress outgoing message-content read receipts (auto-saving still applies)
     if JokerCoreHooks.ghostModeEnabled() {
-        return autoSaveSignal
+        return .single(Void())
     }
     if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
-        return autoSaveSignal |> then(network.request(Api.functions.messages.readMessageContents(id: operation.messageIds.map { $0.id }))
+        return .single(Void()) |> then(network.request(Api.functions.messages.readMessageContents(id: operation.messageIds.map { $0.id }))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in
             return .single(nil)
@@ -134,7 +134,7 @@ private func synchronizeConsumeMessageContents(transaction: Transaction, network
         })
     } else if peerId.namespace == Namespaces.Peer.CloudChannel {
         if let peer = transaction.getPeer(peerId), let inputChannel = apiInputChannel(peer) {
-            return autoSaveSignal |> then(network.request(Api.functions.channels.readMessageContents(channel: inputChannel, id: operation.messageIds.map { $0.id }))
+            return .single(Void()) |> then(network.request(Api.functions.channels.readMessageContents(channel: inputChannel, id: operation.messageIds.map { $0.id }))
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.Bool?, NoError> in
                 return .single(nil)
@@ -146,6 +146,6 @@ private func synchronizeConsumeMessageContents(transaction: Transaction, network
             return .complete()
         }
     } else {
-        return autoSaveSignal
+        return .complete()
     }
 }

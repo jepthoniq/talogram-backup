@@ -16,7 +16,7 @@
 "JokerSettings_ForcePremiumTranslation_Text" = "تفعيل ميزة الترجمة التلقائية الخاصة بالبريميوم لجميع المستخدمين.";
 "JokerSettings_KeepDeletedMessages_Title" = "الاحتفاظ بالرسائل المحذوفة";
 "JokerSettings_KeepDeletedMessages_Text" = "الاحتفاظ بالرسائل المحذوفة محلياً مع علامة x. حذف المحادثة بين الطرفين يحذف كل شيء نهائياً.";
-"JokerSettings_RequireSubscription_Title" = "要求 الاشتراك في القناة";
+"JokerSettings_RequireSubscription_Title" = "اشتراط الاشتراك في القناة";
 "JokerSettings_RequireSubscription_Text" = "الاشتراك في قناة @aljokeruserbot قبل تفعيل أي ميزة من مميزات الجوكر.";
 "JokerSettings_Credits_Header" = "حقوق المصدر";
 "JokerSettings_Credits_Title" = "المصدر بواسطة @aljokeruserbot";

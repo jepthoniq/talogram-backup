@@ -18,23 +18,19 @@ public class JokerIntegrationManager {
     // MARK: - ميزة 1: حفظ الوسائط ذاتية التدمير تلقائياً
     // استدع هذه الدالة عند فتح أي وسائط ذاتية التدمير في العارض
     public static func onMediaOpened(context: AccountContext, messageId: EngineMessage.Id?) {
-        let jokerSettings = getJokerSettingsFromCache()
-
-        guard jokerSettings.autoSaveSelfDestructingMedia else { return }
-
-        // التحقق من الاشتراك في القناة إذا كان مطلوباً
-        if jokerSettings.requireChannelSubscription && !JokerChannelSubscriptionManager.isSubscribed() {
-            return
-        }
-
-        // حفظ الوسيط في الرسائل المحفوظة
-        saveMediaToSavedMessages(context: context, messageId: messageId)
+        guard let messageId = messageId else { return }
+        guard isAutoSaveMediaAllowed() else { return }
+        let _ = JokerCoreHooks.saveConsumedMediaIfNeeded(account: context.account, messageId: messageId).start()
     }
 
-    private static func saveMediaToSavedMessages(context: AccountContext, messageId: EngineMessage.Id?) {
-        guard let messageId = messageId else { return }
-        // تحويل الرسالة إلى الرسائل المحفوظة عبر النواة (يستخدم postbox + network)
-        let _ = JokerCoreHooks.forwardMessageToSavedMessages(account: context.account, messageId: messageId).start()
+    // بوابة الاشتراك/المميزات للحفظ التلقائي
+    private static func isAutoSaveMediaAllowed() -> Bool {
+        let jokerSettings = getJokerSettingsFromCache()
+        guard jokerSettings.autoSaveSelfDestructingMedia else { return false }
+        if jokerSettings.requireChannelSubscription && !JokerChannelSubscriptionManager.isSubscribed() {
+            return false
+        }
+        return true
     }
 
     // MARK: - ميزة 2: وضع الشبح (Ghost Mode)
@@ -48,11 +44,9 @@ public class JokerIntegrationManager {
         return isGhostModeEnabled()
     }
 
-    // إشارة قراءة رسالة معينة (عند الضغط على أيقونة العين)
-    // ملاحظة: engine.messages.readMessages غير متوفر في الإصدار الحالي من
-    // TelegramCore، لذا يبقى فلاغًا هنا لربطه بمكالمة حقيقية لاحقاً.
+    // إشارة قراءة هذه الرسالة وكل ما قبلها (عند الضغط على أيقونة العين في الفقاعة)
     public static func markMessageAsRead(context: AccountContext, messageId: EngineMessage.Id) {
-        let _ = JokerCoreHooks.readAllMessagesForPeer(account: context.account, peerId: messageId.peerId).start()
+        let _ = JokerCoreHooks.readMessagesUpToViaNetwork(account: context.account, peerId: messageId.peerId, maxMessageId: messageId.id).start()
     }
 
     // MARK: - ميزة 3: الاحتفاظ بالرسائل المحذوفة
