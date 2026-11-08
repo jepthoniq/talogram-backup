@@ -26,6 +26,19 @@ jobs:
             exit 1
           fi
 
+      - name: Configure persistent Bazel repository cache
+        run: |
+          printf '\nbuild --repository_cache=%s\n' "$HOME/bazel-repository-cache" >> .bazelrc
+
+      - name: Cache Bazel repository downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/bazel-repository-cache
+          key: bazel-repositories-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-repositories-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}-
+            bazel-repositories-${{ runner.os }}-
+
       - name: Check build environment
         run: |
           xcodebuild -version
@@ -73,12 +86,13 @@ jobs:
 
       - name: Generate fresh verification provisioning profiles
         run: |
-          python3 build-system/Make/Make.py \
-            generate-verification-profiles \
-            --configurationPath build-system/appstore-configuration.json \
-            --codesigningInformationPath build-system/fake-codesigning \
-            --destination build/verification-codesigning/profiles \
-            --extendExpiration
+          bash .github/scripts/make-with-network-retry.sh \
+            python3 build-system/Make/Make.py \
+              generate-verification-profiles \
+              --configurationPath build-system/appstore-configuration.json \
+              --codesigningInformationPath build-system/fake-codesigning \
+              --destination build/verification-codesigning/profiles \
+              --extendExpiration
           mkdir -p build/verification-codesigning/certs
           cp build-system/fake-codesigning/certs/* build/verification-codesigning/certs/
 
@@ -110,14 +124,15 @@ jobs:
 
       - name: Build IPA for iPASide signing
         run: |
-          python3 build-system/Make/Make.py \
-            --cacheDir "$HOME/telegram-bazel-cache" \
-            build \
-            --configurationPath build-system/appstore-configuration.json \
-            --codesigningInformationPath build/verification-codesigning \
-            --buildNumber "$((GITHUB_RUN_NUMBER + 100))" \
-            --configuration release_arm64 \
-            --outputBuildArtifactsPath build/artifacts
+          bash .github/scripts/make-with-network-retry.sh \
+            python3 build-system/Make/Make.py \
+              --cacheDir "$HOME/telegram-bazel-cache" \
+              build \
+              --configurationPath build-system/appstore-configuration.json \
+              --codesigningInformationPath build/verification-codesigning \
+              --buildNumber "$((GITHUB_RUN_NUMBER + 100))" \
+              --configuration release_arm64 \
+              --outputBuildArtifactsPath build/artifacts
 
       - name: Verify IPA package
         run: |
